@@ -30,10 +30,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 # Загружаем переменные из .env
 load_dotenv()
-
 
 # Настройки Telegram
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
