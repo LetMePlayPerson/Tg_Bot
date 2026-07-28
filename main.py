@@ -118,15 +118,17 @@ user_data = {}  # user_id -> {"step": str, "data": dict}
 
 # Шаблоны клавиатур
 KEYBOARD_SALE_ACTIVATION = [
-    ['продажа'],
-    ['спенд'],
-    ['проверить статус запроса'],
+    ['Продажа'],
+    ['Спенд'],
+    ['Проверить списание'],
+    ['Проверить статус запроса'],
 ]
 
 KEYBOARD_MBB_KSN = [
     ['МББ'],
     ['КСН'],
-    ['НВС']
+    ['НВС'],
+    ['ПУП5']
 ]
 
 KEYBOARD_MBB_KSN_NOTHING = [
@@ -224,23 +226,24 @@ async def handle_user_message(update: Update, context: CallbackContext):
     elif step == "choose_action":
         # Проверяем выбранное действие
         if text in [
-            "продажа",
-            "спенд",
-            "проверить статус запроса"
+            "Продажа",
+            "Спенд",
+            "Проверить списание",
+            "Проверить статус запроса"
         ]:
             user_data[user_id]["data"]["action"] = text
-            if text == "продажа":
+            if text in ["Продажа", "Проверить списание"]:
                 user_data[user_id]["step"] = "choose_product"
                 await message.reply_text(
                     "Выберите продукт:",
                     reply_markup=ReplyKeyboardMarkup(KEYBOARD_MBB_KSN,
                                                      one_time_keyboard=True)
                 )
-            elif text == "спенд":
+            elif text == "Спенд":
                 user_data[user_id]["step"] = "final"
                 await finalize_message(user_id, message, context)
 
-            elif text == "проверить статус запроса":
+            elif text == "Проверить статус запроса":
                 user_data[user_id]["step"] = "final"
                 await finalize_message(user_id, message, context)
 
@@ -250,7 +253,7 @@ async def handle_user_message(update: Update, context: CallbackContext):
 
     elif step == "choose_product":
         # Проверяем, что выбрано "МББ" или "КСН"
-        if text in ["МББ", "КСН", "НВС"]:
+        if text in ["МББ", "КСН", "НВС", "ПУП5"]:
             user_data[user_id]["data"]["product"] = text
             user_data[user_id]["step"] = "final"
             await finalize_message(user_id, message, context)
@@ -336,16 +339,28 @@ async def finalize_message(user_id: int, message: telegram.Message,
 
     # Дальше — отправка в Mattermost (только если в Telegram всё успешно)
     try:
-        if "спенд" in final_message:
-            await send_to_mm(mattermost_webhook_url=MATTERMOST_WEBHOOK_SPEND,
-                             message=final_message)
+        product = data.get("product", "")
+        action = data.get("action", "")
+
+        if product == "ПУП5":
+            await send_to_mm(
+                mattermost_webhook_url=MATTERMOST_WEBHOOK_ACTIV,
+                message=final_message
+            )
+        elif action in ["Спенд", "Проверить списание"]:
+            await send_to_mm(
+                mattermost_webhook_url=MATTERMOST_WEBHOOK_SPEND,
+                message=final_message
+            )
         else:
-            await send_to_mm(mattermost_webhook_url=MATTERMOST_WEBHOOK_SELL,
-                             message=final_message)
+            # Все остальные действия (Продажа с МББ/КСН/НВС, статус)
+            await send_to_mm(
+                mattermost_webhook_url=MATTERMOST_WEBHOOK_SELL,
+                message=final_message
+            )
     except Exception as mm_error:
         # Ошибка в MM — не критична, основное сообщение уже отправлено
         logger.warning(f"Не удалось отправить в Mattermost: {mm_error}")
-        # Не прерываем поток, пользователь уже получил ответ
 
     # Обновляем время и очищаем данные
     last_message_time[user_id] = current_time
